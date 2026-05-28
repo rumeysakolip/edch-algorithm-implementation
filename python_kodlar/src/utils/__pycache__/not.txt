@@ -1,1 +1,0 @@
-__init__.cpython-310.pyc ve curve_params.cpython-310.pyc dosyaları indirilmeli.
