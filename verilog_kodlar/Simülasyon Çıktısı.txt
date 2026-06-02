@@ -1,0 +1,143 @@
+Time resolution is 1 ps
+
+==================================================================
+===== ECDH CONTROLLER (TAM SISTEM) NIST P-192 TESTI BASLIYOR =====
+==================================================================
+Donanim kendi icinde Fermat Inversion yapiyor...
+Sonuclar dogrudan NIST test vektorleri ile eslestirilecek!
+
+----------------------------------------------------------------
+[TEST CASE 1] - Tamamlandi!
+NIST Beklenen: 00000000000000003278ee81ae3531ffc7ee3e1ba5143d83ac3d06c0c043ae20
+Donanim Cikti: 00000000000000003278ee81ae3531ffc7ee3e1ba5143d83ac3d06c0c043ae20
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 2] - Tamamlandi!
+NIST Beklenen: 0000000000000000c5e58668c6819c9ad89d6c15451876b23d454a8eb98ee427
+Donanim Cikti: 0000000000000000c5e58668c6819c9ad89d6c15451876b23d454a8eb98ee427
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 3] - Tamamlandi!
+NIST Beklenen: 00000000000000007bc44a2a66de21cd508e19017d54236b1ea08e7f8330c904
+Donanim Cikti: 00000000000000007bc44a2a66de21cd508e19017d54236b1ea08e7f8330c904
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 4] - Tamamlandi!
+NIST Beklenen: 0000000000000000eb47eb49cb22b7073109d028652cbb008641d38c8140e0a4
+Donanim Cikti: 0000000000000000eb47eb49cb22b7073109d028652cbb008641d38c8140e0a4
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 5] - Tamamlandi!
+NIST Beklenen: 00000000000000000abcdc1f493703c55d7cb81b99c3ff876e533443a841957f
+Donanim Cikti: 00000000000000000abcdc1f493703c55d7cb81b99c3ff876e533443a841957f
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 6] - Tamamlandi!
+NIST Beklenen: 00000000000000009cd9be3ade644b30e47d593a959ce34749daf7929036e3ef
+Donanim Cikti: 00000000000000009cd9be3ade644b30e47d593a959ce34749daf7929036e3ef
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 7] - Tamamlandi!
+NIST Beklenen: 0000000000000000cd56c7a443595caedbc77a46f5e9956d299f9030f5634ae7
+Donanim Cikti: 0000000000000000cd56c7a443595caedbc77a46f5e9956d299f9030f5634ae7
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 8] - Tamamlandi!
+NIST Beklenen: 00000000000000005e8d0892f7866b0e8f0b11bb3810f28bb2339c560d9a0494
+Donanim Cikti: 00000000000000005e8d0892f7866b0e8f0b11bb3810f28bb2339c560d9a0494
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 9] - Tamamlandi!
+NIST Beklenen: 00000000000000009468371dd6284b90c1ee32bc7e8b8a16bcac8bab83a2ffb3
+Donanim Cikti: 00000000000000009468371dd6284b90c1ee32bc7e8b8a16bcac8bab83a2ffb3
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 10] - Tamamlandi!
+NIST Beklenen: 000000000000000004f26ec9164d3ceee269f11916560cf3f06e6217853031d2
+Donanim Cikti: 000000000000000004f26ec9164d3ceee269f11916560cf3f06e6217853031d2
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 11] - Tamamlandi!
+NIST Beklenen: 0000000000000000e0855d300740148fa9137e34681baeeba98dd13ad241aa4e
+Donanim Cikti: 0000000000000000e0855d300740148fa9137e34681baeeba98dd13ad241aa4e
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 12] - Tamamlandi!
+NIST Beklenen: 0000000000000000d683ce1dd8ccdb276a399a1d8c052ae038b8787530550ea1
+Donanim Cikti: 0000000000000000d683ce1dd8ccdb276a399a1d8c052ae038b8787530550ea1
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 13] - Tamamlandi!
+NIST Beklenen: 0000000000000000f1461ba5718b20d1c4edb58e5d4a5be0c36d47c40f6b5224
+Donanim Cikti: 0000000000000000f1461ba5718b20d1c4edb58e5d4a5be0c36d47c40f6b5224
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 14] - Tamamlandi!
+NIST Beklenen: 0000000000000000661e19b7da20ff51a0715856004e217e683474e95c800df9
+Donanim Cikti: 0000000000000000661e19b7da20ff51a0715856004e217e683474e95c800df9
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 15] - Tamamlandi!
+NIST Beklenen: 00000000000000006d904fb83b838a1dd67242805e01f6cd3ddc1918c0268aad
+Donanim Cikti: 00000000000000006d904fb83b838a1dd67242805e01f6cd3ddc1918c0268aad
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 16] - Tamamlandi!
+NIST Beklenen: 0000000000000000764fb42a1904d8054f58e34e5bdb188f5e6277b5917c1281
+Donanim Cikti: 0000000000000000764fb42a1904d8054f58e34e5bdb188f5e6277b5917c1281
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 17] - Tamamlandi!
+NIST Beklenen: 00000000000000001a3f1672adb4ac0e9041b15e881a2eab3d83f3d104bf9874
+Donanim Cikti: 00000000000000001a3f1672adb4ac0e9041b15e881a2eab3d83f3d104bf9874
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 18] - Tamamlandi!
+NIST Beklenen: 0000000000000000786b27314515b3cd71bc46b84cf1dd6a16c958fd89b0d36d
+Donanim Cikti: 0000000000000000786b27314515b3cd71bc46b84cf1dd6a16c958fd89b0d36d
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 19] - Tamamlandi!
+NIST Beklenen: 000000000000000013b543acc6bbdef75e279a4e230d44a24f4f61737e828796
+Donanim Cikti: 000000000000000013b543acc6bbdef75e279a4e230d44a24f4f61737e828796
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 20] - Tamamlandi!
+NIST Beklenen: 00000000000000001df5ab1918ae07d5944ed6cbd871a93d5d5fef74509a29a6
+Donanim Cikti: 00000000000000001df5ab1918ae07d5944ed6cbd871a93d5d5fef74509a29a6
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 21] - Tamamlandi!
+NIST Beklenen: 00000000000000008fe7d5e15079bf392476222e0b7e1312e56dbe3e44deb01e
+Donanim Cikti: 00000000000000008fe7d5e15079bf392476222e0b7e1312e56dbe3e44deb01e
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 22] - Tamamlandi!
+NIST Beklenen: 00000000000000002c423c1b0d13142023a9b74247172db04bfda785f313f35c
+Donanim Cikti: 00000000000000002c423c1b0d13142023a9b74247172db04bfda785f313f35c
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 23] - Tamamlandi!
+NIST Beklenen: 0000000000000000a8089995fbe8b744463e5a2cc7cb365cbfd30e7443cabadf
+Donanim Cikti: 0000000000000000a8089995fbe8b744463e5a2cc7cb365cbfd30e7443cabadf
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 24] - Tamamlandi!
+NIST Beklenen: 000000000000000045a97368f40bf82768427115d18a02f8eb66a71fbdf6e52f
+Donanim Cikti: 000000000000000045a97368f40bf82768427115d18a02f8eb66a71fbdf6e52f
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+----------------------------------------------------------------
+[TEST CASE 25] - Tamamlandi!
+NIST Beklenen: 0000000000000000c028a0258310fa50e44b4fc9214c3da96652072c9856ba3d
+Donanim Cikti: 0000000000000000c028a0258310fa50e44b4fc9214c3da96652072c9856ba3d
+Sonuc        : [GECTI - PASS] Kusursuz Eslesme!
+
+==================================================================
+TUM TESTLER VEKTORLERI TARANDI!
+Toplam Gecen Test (PASS) : 25
+Toplam Kalan Test (FAIL) : 0
+
+==================================================================
+>>>>> TEBRIKLER! SISTEMINIZ NIST STANDARTLARIYLA 100  UYUMLU. <<<<<
+==================================================================
+$finish called at time : 342648025 ns : File "C:/Users/rumey/Documents/Vivado-files/CNN-project/ecdh_algorithm/ecdh_algorithm.srcs/sim_1/new/tb_ecdh_controller.sv" Line 137
