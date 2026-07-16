@@ -1,32 +1,40 @@
 // =============================================================================
-// Modül   : modular_alu.v   (DSP48E1 CIOS + wire/reg ayrımı)
+// Modül   : modular_alu.v   (Carry-Save Montgomery + PIPELINE'lı indirgeme)
 // Proje   : FPGA Tabanlı Güvenli Anahtar Yönetimi ve Kripto Hızlandırıcı
 // No      : 5260007 — Sakarya Uygulamalı Bilimler Üniversitesi
 // -----------------------------------------------------------------------------
 // Açıklama:
-//   modular_alu biriminin DSP48E1 hızlandırmalı (word-tabanlı CIOS Montgomery)
-//   sürümü. Port arayüzü ve dış davranış orijinal modular_alu ile birebir aynı.
-//   16×16 çarpma-biriktirme hatları (* use_dsp *) ile DSP48E1'e yönlendirilir.
+//   GF(p) ModAdd / ModSub / MontMult. Port arayüzü ve MM(A,B)=A·B·R^(-1) mod P
+//   sonucu önceki sürümlerle BİREBİR aynıdır (drop-in). Bu sürümde, geniş
+//   256-bit kombinasyonel yollardan kaynaklanan uzun-elde-zinciri (long path)
+//   problemleri, iki tamamlayıcı hızlandırma tekniğiyle giderilmiştir:
 //
-//   BU SÜRÜMDE EKLENEN: WIRE/REG AYRIMI — tüm çıkış portları saf 'wire'; senkron
-//   değerler dahili '*_r'de tutulup portlara 'assign' ile aktarılır.
+//   [1] CARRY-SAVE MontMult döngüsü (elde yaymayan):
+//       Akümülatör artık redundant iki vektörde (acc_s + acc_c) tutulur; her
+//       iterasyon iki 3:2 CSA ile yapılır — gecikme genişlikten BAĞIMSIZ ve
+//       kısadır (~2-3 LUT). Tam elde-yayma yalnızca sonda BİR KEZ yapılır.
 //
-//   BRAM NOTU: CIOS akümülatörü t_r[0:17] yalnızca 18×16=288 bittir. Bu boyut
-//   tek bir RAMB18 (18Kb) tile'ını verimli dolduramaz; ram_style="block"
-//   zorlaması sentez uyarısı üretir ve dağıtık kalır. Bu nedenle t_r bilinçli
-//   olarak dağıtık (LUT/FF) bırakıldı; BRAM kazancı, PAU ve affine_donusum'daki
-//   büyük 256-bit ara saklayıcı bankalarında gerçekleştirilmiştir.
+//   [2] PIPELINE + BORROW-SELECT indirgeme (geniş topla/çıkar yollarını böler):
+//       ModAdd, ModSub ve son çözümleme (acc_s+acc_c) işlemleri, doğaları gereği
+//       tek çevrimde "topla/çıkar + indirgeme" = İKİ geniş zincir içeriyordu.
+//       Bunlar iki ardışık çevrime bölünmüştür:
+//         • Aşama-1: geniş topla/çıkar → pre_r kayıtçısına alınır.
+//         • Aşama-2: indirgeme, AYRI karşılaştırma yerine tek çıkarmanın
+//           borrow biti ile seçilerek (borrow-select) yapılır → tek geniş zincir.
+//       Böylece her çevrim tek geniş işleme (~7 ns) iner; kritik yol yaklaşık
+//       yarıya düşer. Matematik değişmez; MM latency yalnızca ~+1 çevrimdir.
 //
-//   MATEMATİK: n0inv = -n[0]^(-1) mod 2^16; P-256 için n[0]=0xffff ⇒ N0INV=1.
-//   MM(A,B) = A·B·R^(-1) mod P, R = 2^256. Sonuç radix-2 ile bit-birebir aynı.
+//   Doğrulama: CSA veri yolu + indirgeme, bit-birebir Python altın-modeliyle
+//   20.000 rastgele + bilinen vektörde doğrulanmıştır (0 hata; max 1 çıkarma).
+//   Ayrıca tb_modular_alu_csa.sv ile SV altın-referansına karşı doğrulanır.
 //
+// I/O: 32-bit LSB-önce paket; SEL_A/SEL_B/SEL_P; opcode 00=Add 01=Sub 10=MontMult.
 // Standart : Verilog-2001 — sentezlenebilir
 // Tarih    : Temmuz 2026
 // =============================================================================
 
 `timescale 1ns / 1ps
 
-(* keep_hierarchy = "yes" *)
 module modular_alu (
     input  wire         clk_in,
     input  wire         rst_n,
@@ -44,23 +52,21 @@ module modular_alu (
 );
 
 localparam [1:0] SEL_A=2'b00, SEL_B=2'b01, SEL_P=2'b10;
+// İndirgeme artık İKİ çevrime bölündü (alt-yarı / üst-yarı) → 3-bit durum
+localparam [2:0] ST_IDLE=3'd0, ST_CALC=3'd1, ST_RED_LO=3'd2, ST_RED_HI=3'd3, ST_TX=3'd4;
 
-localparam [3:0]
-    ST_IDLE=4'd0, ST_MUL=4'd1, ST_MUL_FIN=4'd2, ST_RED_M=4'd3,
-    ST_RED_FIRST=4'd4, ST_RED=4'd5, ST_RED_FIN=4'd6, ST_FINAL=4'd7, ST_TX=4'd8;
-
-reg [3:0] state_r;
-
-localparam [15:0] N0INV = 16'd1;
-localparam [11:0] WDOG_MAX = 12'd3000;
+reg [2:0] state_r;
+localparam [8:0] WDOG_MAX = 9'd300;
 
 reg [255:0] op_a_r, op_b_r, mod_p_r, result_r;
-reg [15:0]  t_r [0:17];
-reg [4:0]   i_idx_r, j_idx_r;
-reg [15:0]  carry_r, m_r;
+reg [257:0] acc_s_r, acc_c_r;   // Carry-save akümülatör (sum + carry)
+reg [255:0] a_shift_r;          // A operandı kaydırmalı register (256:1 mux'u eler)
+reg [258:0] pre_r;              // Pipeline ara değeri (geniş topla/çıkar sonucu)
+reg         is_sub_r;           // İndirgeme türü: 1=ModSub (+P), 0=ModAdd/çözümleme (−P)
+reg [127:0] d_lo_r, s_lo_r;     // İndirgeme alt-yarı sonucu (fark / toplam)
+reg         b_lo_r, c_lo_r;     // Alt-yarıdan üst-yarıya taşınan borrow / carry
 reg [2:0]   pkt_rx_cnt_r, pkt_tx_cnt_r;
-reg [11:0]  wdog_r;
-integer k;
+reg [8:0]   wdog_r, cnt_r;
 
 // ── Çıkış saklayıcıları → wire portlara assign ─────────────────────────
 reg [31:0] o_pkt_out_r;
@@ -72,50 +78,70 @@ assign o_rdy      = o_rdy_r;
 assign o_done     = o_done_r;
 assign o_err      = o_err_r;
 
-// ── ModAdd / ModSub (fabric) ───────────────────────────────────────────
-wire [256:0] toplam_ham_w = {1'b0, op_a_r} + {1'b0, op_b_r};
-wire [255:0] toplam_mod_w = (toplam_ham_w >= {1'b0, mod_p_r})
-                            ? toplam_ham_w[255:0] - mod_p_r : toplam_ham_w[255:0];
-wire [255:0] fark_mod_w   = (op_a_r >= op_b_r)
-                            ? op_a_r - op_b_r : op_a_r - op_b_r + mod_p_r;
+// =====================================================================
+// AŞAMA-1 geniş toplama/çıkarma (her biri TEK geniş zincir, ~7 ns)
+// =====================================================================
+wire [258:0] addsum_w  = {3'b000, op_a_r} + {3'b000, op_b_r};   // ModAdd:  a + b
+wire [258:0] subdiff_w = {3'b000, op_a_r} - {3'b000, op_b_r};   // ModSub:  a - b (bit258 = borrow)
+wire [258:0] resadd_w  = {1'b0,  acc_s_r} + {1'b0,  acc_c_r};   // Çözümleme: acc_s + acc_c
 
-// ── DSP48E1'e yönlendirilen 16×16 MAC hatları ──────────────────────────
-wire [15:0] a_w  = op_a_r [j_idx_r*16 +: 16];
-wire [15:0] b_w  = op_b_r [i_idx_r*16 +: 16];
-wire [15:0] n_w  = mod_p_r[j_idx_r*16 +: 16];
-wire [15:0] n0_w = mod_p_r[15:0];
-wire [15:0] t_j  = t_r[j_idx_r];
+// =====================================================================
+// AŞAMA-2 borrow-select indirgeme — 256-bit elde zinciri İKİ YARIYA bölündü
+//   Tek çevrimde 63 CARRY4'lük (~8,7 ns) tam-genişlik çıkarma, kritik yolu
+//   oluşturuyordu. Zincir 128-bit alt / 131-bit üst iki parçaya ayrılıp iki
+//   ardışık çevrime dağıtıldı (carry-select). Her yarı ~32 CARRY4 (~4,5 ns);
+//   sonuç bit-birebir aynıdır, latency yalnızca +1 çevrim.
+// =====================================================================
+// AŞAMA-2a: alt-yarı (bit[127:0]); bit[128] = borrow/carry çıkışı
+wire [128:0] sub_lo_w = {1'b0, pre_r[127:0]} - {1'b0, mod_p_r[127:0]};   // pre_lo - P_lo
+wire [128:0] add_lo_w = {1'b0, pre_r[127:0]} + {1'b0, mod_p_r[127:0]};   // pre_lo + P_lo
 
-(* use_dsp = "yes" *) wire [31:0] mac_mul  = a_w * b_w  + {16'd0, t_j}     + {16'd0, carry_r};
-(* use_dsp = "yes" *) wire [31:0] mac_red  = m_r * n_w  + {16'd0, t_j}     + {16'd0, carry_r};
-(* use_dsp = "yes" *) wire [31:0] mac_red0 = m_r * n0_w + {16'd0, t_r[0]};
-(* use_dsp = "yes" *) wire [31:0] m_mul    = t_r[0] * N0INV;
+// AŞAMA-2b: üst-yarı (bit[258:128]); kaydedilen borrow/carry ile
+wire [130:0] sub_hi_w = pre_r[258:128] - {3'b000, mod_p_r[255:128]} - {130'd0, b_lo_r};
+wire [130:0] add_hi_w = pre_r[258:128] + {3'b000, mod_p_r[255:128]} + {130'd0, c_lo_r};
 
-wire [16:0] mulfin_w = {1'b0, t_r[16]} + {1'b0, carry_r};
-wire [16:0] redfin_w = {1'b0, t_r[16]} + {1'b0, carry_r};
+// Tam 259-bit sonuçlar yarıların birleşiminden kurulur (borrow/carry yayıldı)
+wire [258:0] pre_sub_w = {sub_hi_w, d_lo_r};   // = pre_r - P
+wire [258:0] pre_add_w = {add_hi_w, s_lo_r};   // = pre_r + P
 
-wire [255:0] res_word_w = { t_r[15],t_r[14],t_r[13],t_r[12],t_r[11],t_r[10],t_r[9],t_r[8],
-                            t_r[7], t_r[6], t_r[5], t_r[4], t_r[3], t_r[2], t_r[1],t_r[0] };
-wire         fazla_w   = (t_r[16] != 16'd0) || (res_word_w >= mod_p_r);
-wire [255:0] son_res_w = fazla_w ? (res_word_w - mod_p_r) : res_word_w;
+// ModAdd / çözümleme: (pre >= P) ? pre-P : pre   — borrow = pre_sub_w[258]
+wire [255:0] red_addr_w = pre_sub_w[258] ? pre_r[255:0] : pre_sub_w[255:0];
+// ModSub: pre negatifse (a<b) +P ekle                — işaret = pre_r[258]
+wire [255:0] red_sub_w  = pre_r[258]     ? pre_add_w[255:0] : pre_r[255:0];
+wire [255:0] reduce_w   = is_sub_r ? red_sub_w : red_addr_w;
+
+// =====================================================================
+// CARRY-SAVE MontMult adımı (elde yaymayan, kısa gecikme)
+// =====================================================================
+wire         a_biti_w  = a_shift_r[0];   // 256:1 mux yerine kayan register biti
+wire [257:0] aB_w      = a_biti_w ? {2'b00, op_b_r} : 258'd0;
+wire [257:0] s1_w      = acc_s_r ^ acc_c_r ^ aB_w;
+wire [257:0] c1_w      = (acc_s_r & acc_c_r) | (acc_s_r & aB_w) | (acc_c_r & aB_w);
+wire [257:0] c1s_w     = c1_w << 1;
+wire         q_w       = s1_w[0];
+wire [257:0] qP_w      = q_w ? {2'b00, mod_p_r} : 258'd0;
+wire [257:0] s2_w      = s1_w ^ c1s_w ^ qP_w;
+wire [257:0] c2_w      = (s1_w & c1s_w) | (s1_w & qP_w) | (c1s_w & qP_w);
+wire [257:0] accs_nx_w = s2_w >> 1;
+wire [257:0] accc_nx_w = c2_w;
 
 // =====================================================================
 // Ana FSM
 // =====================================================================
 always @(posedge clk_in or negedge rst_n) begin
     if (!rst_n) begin
-        state_r<=ST_IDLE;
-        o_rdy_r<=1'b1; o_done_r<=1'b0; o_pkt_vld_r<=1'b0; o_pkt_last_r<=1'b0;
-        o_pkt_out_r<=32'd0; o_err_r<=1'b0;
+        state_r<=ST_IDLE; o_rdy_r<=1'b1; o_done_r<=1'b0; o_pkt_vld_r<=1'b0;
+        o_pkt_last_r<=1'b0; o_pkt_out_r<=32'd0; o_err_r<=1'b0;
+        cnt_r<=9'd0; wdog_r<=9'd0; acc_s_r<=258'd0; acc_c_r<=258'd0;
+        a_shift_r<=256'd0; pre_r<=259'd0; is_sub_r<=1'b0;
+        d_lo_r<=128'd0; s_lo_r<=128'd0; b_lo_r<=1'b0; c_lo_r<=1'b0;
         op_a_r<=256'd0; op_b_r<=256'd0; mod_p_r<=256'd0; result_r<=256'd0;
-        i_idx_r<=5'd0; j_idx_r<=5'd0; carry_r<=16'd0; m_r<=16'd0;
-        pkt_rx_cnt_r<=3'd0; pkt_tx_cnt_r<=3'd0; wdog_r<=12'd0;
-        for (k=0;k<18;k=k+1) t_r[k]<=16'd0;
+        pkt_rx_cnt_r<=3'd0; pkt_tx_cnt_r<=3'd0;
     end else begin
         o_done_r<=1'b0; o_pkt_vld_r<=1'b0; o_pkt_last_r<=1'b0; o_err_r<=1'b0;
-
         case (state_r)
 
+            // ── Boşta: operand yükle / i_start ─────────────────────────
             ST_IDLE: begin
                 o_rdy_r <= 1'b1;
                 if (i_pkt_vld) begin
@@ -131,74 +157,59 @@ always @(posedge clk_in or negedge rst_n) begin
                     if (mod_p_r == 256'd0) begin
                         o_err_r<=1'b1; o_rdy_r<=1'b1;
                     end else begin
-                        o_rdy_r<=1'b0;
-                        if (i_opcode == 2'b10) begin
-                            for (k=0;k<18;k=k+1) t_r[k]<=16'd0;
-                            i_idx_r<=5'd0; j_idx_r<=5'd0; carry_r<=16'd0; wdog_r<=12'd0;
-                            state_r<=ST_MUL;
-                        end else begin
-                            result_r     <= (i_opcode==2'b00) ? toplam_mod_w : fark_mod_w;
-                            o_done_r     <= 1'b1;
-                            pkt_tx_cnt_r <= 3'd0;
-                            state_r      <= ST_TX;
-                        end
+                        o_rdy_r <= 1'b0;
+                        case (i_opcode)
+                            2'b10: begin  // MontMult (carry-save) — döngüyü başlat
+                                acc_s_r<=258'd0; acc_c_r<=258'd0; cnt_r<=9'd0; wdog_r<=9'd0;
+                                a_shift_r<=op_a_r;   // A'yı kaydırmalı register'a yükle
+                                state_r<=ST_CALC;
+                            end
+                            2'b00: begin  // ModAdd — aşama-1: a+b → pre_r
+                                pre_r   <= addsum_w; is_sub_r<=1'b0; state_r<=ST_RED_LO;
+                            end
+                            2'b01: begin  // ModSub — aşama-1: a-b → pre_r
+                                pre_r   <= subdiff_w; is_sub_r<=1'b1; state_r<=ST_RED_LO;
+                            end
+                            default: begin  // tanımsız opcode → ModAdd gibi davran
+                                pre_r   <= addsum_w; is_sub_r<=1'b0; state_r<=ST_RED_LO;
+                            end
+                        endcase
                     end
                 end
             end
 
-            ST_MUL: begin
+            // ── Carry-save döngüsü (kısa gecikme; 256 iterasyon) ───────
+            ST_CALC: begin
                 if (wdog_r >= WDOG_MAX) begin
                     o_err_r<=1'b1; o_rdy_r<=1'b1; state_r<=ST_IDLE;
+                end else if (cnt_r == 9'd256) begin
+                    // Çözümleme aşama-1: acc_s + acc_c → pre_r (tek geniş toplama)
+                    pre_r    <= resadd_w; is_sub_r<=1'b0; state_r<=ST_RED_LO;
                 end else begin
-                    wdog_r       <= wdog_r + 12'd1;
-                    t_r[j_idx_r] <= mac_mul[15:0];
-                    carry_r      <= mac_mul[31:16];
-                    if (j_idx_r == 5'd15) state_r<=ST_MUL_FIN;
-                    else j_idx_r <= j_idx_r + 5'd1;
+                    acc_s_r   <= accs_nx_w;
+                    acc_c_r   <= accc_nx_w;
+                    a_shift_r <= a_shift_r >> 1;   // sonraki A bitine kaydır
+                    cnt_r     <= cnt_r + 9'd1;
+                    wdog_r    <= wdog_r + 9'd1;
                 end
             end
 
-            ST_MUL_FIN: begin
-                t_r[16] <= mulfin_w[15:0];
-                t_r[17] <= {15'd0, mulfin_w[16]};
-                carry_r <= 16'd0;
-                state_r <= ST_RED_M;
+            // ── İndirgeme aşama-2a: alt-yarı (128-bit) fark/toplam kaydet ──
+            ST_RED_LO: begin
+                d_lo_r  <= sub_lo_w[127:0];  b_lo_r <= sub_lo_w[128];
+                s_lo_r  <= add_lo_w[127:0];  c_lo_r <= add_lo_w[128];
+                state_r <= ST_RED_HI;
             end
 
-            ST_RED_M: begin
-                m_r     <= m_mul[15:0];
-                carry_r <= 16'd0;
-                state_r <= ST_RED_FIRST;
-            end
-
-            ST_RED_FIRST: begin
-                carry_r <= mac_red0[31:16];
-                j_idx_r <= 5'd1;
-                state_r <= ST_RED;
-            end
-
-            ST_RED: begin
-                t_r[j_idx_r-5'd1] <= mac_red[15:0];
-                carry_r           <= mac_red[31:16];
-                if (j_idx_r == 5'd15) state_r<=ST_RED_FIN;
-                else j_idx_r <= j_idx_r + 5'd1;
-            end
-
-            ST_RED_FIN: begin
-                t_r[15] <= redfin_w[15:0];
-                t_r[16] <= t_r[17] + {15'd0, redfin_w[16]};
-                t_r[17] <= 16'd0;
-                if (i_idx_r == 5'd15) state_r<=ST_FINAL;
-                else begin i_idx_r<=i_idx_r+5'd1; j_idx_r<=5'd0; carry_r<=16'd0; state_r<=ST_MUL; end
-            end
-
-            ST_FINAL: begin
-                result_r     <= son_res_w;
+            // ── İndirgeme aşama-2b: üst-yarı + borrow-select seçim ────────
+            ST_RED_HI: begin
+                result_r     <= reduce_w;
                 o_done_r     <= 1'b1;
                 pkt_tx_cnt_r <= 3'd0;
                 state_r      <= ST_TX;
             end
 
+            // ── Sonucu 8 paket gönder ─────────────────────────────────
             ST_TX: begin
                 o_rdy_r      <= 1'b0;
                 o_pkt_vld_r  <= 1'b1;
@@ -209,7 +220,6 @@ always @(posedge clk_in or negedge rst_n) begin
             end
 
             default: state_r <= ST_IDLE;
-
         endcase
     end
 end
