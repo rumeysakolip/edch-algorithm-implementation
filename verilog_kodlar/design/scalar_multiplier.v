@@ -73,6 +73,7 @@ reg [4:0] state_r;
 localparam [14:0] PAU_WDOG_MAX = 15'd25000;
 
 reg [255:0] p_r, d_r, bx_r, by_r, bz_r;
+reg [255:0] d_shift_r;   // d skaler kaydırmalı register (256:1 mux'u eler; MSB-önce)
 reg [255:0] r0_x_r, r0_y_r, r0_z_r, r1_x_r, r1_y_r, r1_z_r;
 reg [255:0] add_x_r, add_y_r, add_z_r, dbl_x_r, dbl_y_r, dbl_z_r;
 reg [8:0]   bit_idx_r;
@@ -92,7 +93,7 @@ assign o_rdy      = o_rdy_r;
 assign o_done     = o_done_r;
 assign o_err      = o_err_r;
 
-wire        cswap_bit_w = d_r[bit_idx_r[7:0]];
+wire        cswap_bit_w = d_shift_r[255];   // 256:1 mux yerine kayan register biti (MSB)
 wire [255:0] cswap_mx_w = {256{cswap_bit_w}} & (r0_x_r ^ r1_x_r);
 wire [255:0] cswap_my_w = {256{cswap_bit_w}} & (r0_y_r ^ r1_y_r);
 wire [255:0] cswap_mz_w = {256{cswap_bit_w}} & (r0_z_r ^ r1_z_r);
@@ -131,7 +132,7 @@ always @(posedge clk_in or negedge rst_n) begin
         r1_x_r<=256'd0; r1_y_r<=256'd0; r1_z_r<=256'd0;
         add_x_r<=256'd0; add_y_r<=256'd0; add_z_r<=256'd0;
         dbl_x_r<=256'd0; dbl_y_r<=256'd0; dbl_z_r<=256'd0;
-        bit_idx_r<=9'd255; pau_wdog_r<=15'd0;
+        bit_idx_r<=9'd255; pau_wdog_r<=15'd0; d_shift_r<=256'd0;
         pkt_rx_cnt_r<=3'd0; pkt_rx_cnt2_r<=3'd0; pkt_tx_cnt_r<=3'd0;
     end else begin
         o_done_r<=1'b0; o_pkt_vld_r<=1'b0; o_pkt_last_r<=1'b0; o_err_r<=1'b0;
@@ -165,6 +166,7 @@ always @(posedge clk_in or negedge rst_n) begin
                 r0_x_r<=bx_r; r0_y_r<=by_r; r0_z_r<=256'd0;   // R0 = ∞
                 r1_x_r<=bx_r; r1_y_r<=by_r; r1_z_r<=bz_r;      // R1 = G
                 bit_idx_r<=9'd255; pkt_rx_cnt2_r<=3'd0; state_r<=ST_SEND_MODP;
+                d_shift_r<=d_r;   // d'yi kaydırmalı register'a yükle (MSB-önce)
             end
 
             ST_SEND_MODP: begin
@@ -236,7 +238,7 @@ always @(posedge clk_in or negedge rst_n) begin
                 r0_x_r<=r0_x_r^cswap_mx_w; r0_y_r<=r0_y_r^cswap_my_w; r0_z_r<=r0_z_r^cswap_mz_w;
                 r1_x_r<=r1_x_r^cswap_mx_w; r1_y_r<=r1_y_r^cswap_my_w; r1_z_r<=r1_z_r^cswap_mz_w;
                 if (bit_idx_r==9'd0) begin pkt_tx_cnt_r<=3'd0; state_r<=ST_TX_X; end
-                else begin bit_idx_r<=bit_idx_r-9'd1; state_r<=ST_PRE_CSWAP; end
+                else begin bit_idx_r<=bit_idx_r-9'd1; d_shift_r<=d_shift_r<<1; state_r<=ST_PRE_CSWAP; end
             end
 
             ST_TX_X: begin o_pkt_vld_r<=1'b1; o_pkt_sel_r<=2'b00; o_pkt_out_r<=r0_x_r[pkt_tx_cnt_r*32 +: 32]; o_pkt_last_r<=(pkt_tx_cnt_r==3'd7);
