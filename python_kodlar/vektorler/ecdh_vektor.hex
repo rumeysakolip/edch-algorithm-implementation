@@ -1,0 +1,67 @@
+// ecdh_vektor.hex — vektor_uret.py tarafindan uretildi
+// Sira: D_A, QB_X, QB_Y, QA_X, QA_Y, S_X, S_Y
+// Her alan 8 word, little-endian (word0 = bit[31:0])
+// Koordinatlar MONTGOMERY formda; D_A skalerdir (donusum yok)
+// --- D_A ---
+72a5d7f1
+a5d90c3f
+5f607182
+1b2c3d4e
+1da02c2a
+6c3937d9
+45ba7517
+c9afa9d8
+// --- QB_X ---
+212a4abf
+cc687464
+0386cecb
+febf6793
+77e017af
+88718081
+91a2cc9b
+b5e77bb7
+// --- QB_Y ---
+e80ab59a
+16d2ecf9
+3ce09f6c
+109f3875
+6942db7e
+5377d6b2
+8e80e940
+e4b6e871
+// --- QA_X ---
+7ba0923f
+aa72eebe
+2815c49a
+e3156d85
+fd914659
+3a589578
+66aa3516
+13faf75c
+// --- QA_Y ---
+77ad9539
+773ee51e
+44f6f56f
+8872c8ee
+18679bb4
+05b9cfc7
+0fe13d30
+43c06da4
+// --- S_X ---
+3760f814
+2c3eed37
+d08421ca
+8bba744c
+3dd52994
+104efb4a
+b0dc5cba
+95c047f3
+// --- S_Y ---
+21796f14
+deb0f26e
+f9c58a29
+9008bd32
+e0a7e5c2
+f172fee5
+fa5edc09
+94c2b6bd

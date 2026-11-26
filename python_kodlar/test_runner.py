@@ -10,19 +10,19 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# İçe aktarma (import) hatalarını önlemek için alternatifli yapı
+# src/ ve src2/ artık TEK KAYNAĞA (src/) konsolide edildi — RTL'nin tek
+# paylaşılan MALU/PAU mimarisini yansıtmak için ECDH ve ECDSA aynı paketi
+# kullanıyor (src2/*.py dosyaları geriye dönük uyumluluk için src/'yi yeniden
+# dışa aktaran ince "shim" dosyalarına dönüştürüldü). Eski "sys.modules['src']
+# = src2" takası KALDIRILDI: src2 shim'leri artık `from src.X import Y`
+# yaptığı için bu takas dairesel içe aktarma (circular import) hatası
+# üretiyordu.
 try:
-    import src2
-    sys.modules['src'] = src2
-except ImportError:
-    pass
-
-try:
+    from src.scalar_mult import ScalarMultiplier
+    from src.ecdsa_protocol import ECDSA_Protocol
+except ModuleNotFoundError:
     from scalar_mult import ScalarMultiplier
     from ecdsa_protocol import ECDSA_Protocol
-except ModuleNotFoundError:
-    from src2.scalar_mult import ScalarMultiplier
-    from src2.ecdsa_protocol import ECDSA_Protocol
 
 # ==============================================================================
 # 2. NIST STANDART ELİPTİK EĞRİ PARAMETRELERİ
@@ -59,7 +59,13 @@ CURVES = {
         p=0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff,
         n=0xffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973,
         Gx=0xaa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7,
-        Gy=0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da311315f5920cfab3f4ac1a28214611facea172fbd81a,
+        # [DÜZELTİLDİ] Önceki Gy değeri hatalıydı (yanlış hex sabiti) — RFC 6979
+        # Ek A.2.6 (NIST P-384) referans imzasıyla çapraz kontrol edilerek
+        # doğru NIST/SECG secp384r1 Gy değeriyle değiştirildi. Eski (hatalı)
+        # değer P-384 test gruplarının TAMAMININ başarısız görünmesine yol
+        # açıyordu; bu Binary/Koblitz eğriler gibi "desteklenmiyor" değil,
+        # gerçek bir veri hatasıydı.
+        Gy=0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f,
         bit_length=384
     ),
     "P-521": Curve(
@@ -73,12 +79,23 @@ CURVES = {
 }
 
 # ==============================================================================
-# 3. DİNAMİK JSON YÜKLEYİCİ VE TEST KOŞUCU
+# 3. ÇIKTI YARDIMCISI — validate_p256.py ile AYNI [OK]/[FAIL] biçimi
+# ==============================================================================
+def check(name, ok, detail=""):
+    if ok:
+        print(f"  [OK]   {name}")
+    else:
+        print(f"  [FAIL] {name}  {detail}")
+    return ok
+
+
+# ==============================================================================
+# 4. DİNAMİK JSON YÜKLEYİCİ VE TEST KOŞUCU
 # ==============================================================================
 def run_tests():
     # JSON dosyalarını dinamik olarak bul
     possible_paths = [
-        (os.path.join(current_dir, "data2", "prompt.json"), os.path.join(current_dir, "data2", "expectedResults.json")),
+        (os.path.join(current_dir, "data", "ecdsa-keygen", "prompt.json"), os.path.join(current_dir, "data", "ecdsa-keygen", "expectedResults.json")),
         (os.path.join(current_dir, "prompt.json"), os.path.join(current_dir, "expectedResults.json"))
     ]
 
@@ -142,24 +159,26 @@ def run_tests():
 
             # --- STRİNG DEĞİL, DOĞRUDAN MATEMATİKSEL EŞİTLİK KONTROLÜ ---
             # Böylece baştaki 0'lar eksik olsa bile sayının değeri aynı kalacağından hata vermez.
-            if calc_qx_int == expected_qx_int and calc_qy_int == expected_qy_int:
-                passed_tests += 1
-            else:
-                # Eğer gerçekten matematiksel bir hata varsa, ekrana doğru byte uzunluğunda
+            ok = (calc_qx_int == expected_qx_int and calc_qy_int == expected_qy_int)
+
+            detail = ""
+            if not ok:
+                # Eğer gerçekten matematiksel bir hata varsa, doğru byte uzunluğunda
                 # (baştaki sıfırları tamamlayarak) yazdırırız ki hatayı nerede yaptığımızı görelim.
                 byte_len = (curve.bit_length + 7) // 8
                 hex_len = byte_len * 2
+                detail = (f"(beklenen Qx={expected_qx_int:0{hex_len}X} "
+                          f"hesaplanan Qx={calc_qx_int:0{hex_len}X} | "
+                          f"beklenen Qy={expected_qy_int:0{hex_len}X} "
+                          f"hesaplanan Qy={calc_qy_int:0{hex_len}X})")
 
-                print(f"\n  [-] HATA: Test Case {tc_id} başarısız oldu!")
-                print(f"      Beklenen   Qx: {expected_qx_int:0{hex_len}X}")
-                print(f"      Hesaplanan Qx: {calc_qx_int:0{hex_len}X}")
-                print(f"      Beklenen   Qy: {expected_qy_int:0{hex_len}X}")
-                print(f"      Hesaplanan Qy: {calc_qy_int:0{hex_len}X}")
+            if check(f"keyGen {curve_name} tcId={tc_id}", ok, detail):
+                passed_tests += 1
 
     print("\n" + "="*45)
     print("               TEST ÖZETİ")
     print("="*45)
-    print(f" İşlenen Toplam Prime Eğri Testi : {total_tests}")
+    print(f" TOPLAM İşlenen Prime Eğri Testi : {total_tests}")
     print(f" BAŞARILI OLANLAR                : {passed_tests}")
     if total_tests > passed_tests:
         print(f" BAŞARISIZ OLANLAR               : {total_tests - passed_tests}")

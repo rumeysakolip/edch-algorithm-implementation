@@ -20,8 +20,71 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-NIST-developed software is provided by NIST as a public service. You may use, copy, and distribute copies of the software in any medium, provided that you keep intact this entire notice. You may improve, modify, and create derivative works of the software or any portion of the software, and you may copy and distribute such modifications or works. Modified works should carry a notice stating that you changed the software and should note the date and nature of any such change. Please explicitly acknowledge the National Institute of Standards and Technology as the source of the software.
+==============================================================================
+THIRD-PARTY NOTICES
+==============================================================================
 
-NIST-developed software is expressly provided "AS IS." NIST MAKES NO WARRANTY OF ANY KIND, EXPRESS, IMPLIED, IN FACT, OR ARISING BY OPERATION OF LAW, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND DATA ACCURACY. NIST NEITHER REPRESENTS NOR WARRANTS THAT THE OPERATION OF THE SOFTWARE WILL BE UNINTERRUPTED OR ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. NIST DOES NOT WARRANT OR MAKE ANY REPRESENTATIONS REGARDING THE USE OF THE SOFTWARE OR THE RESULTS THEREOF, INCLUDING BUT NOT LIMITED TO THE CORRECTNESS, ACCURACY, RELIABILITY, OR USEFULNESS OF THE SOFTWARE.
+The MIT License above applies to the original source code of this repository
+(RTL, testbenches, Python models, scripts and documentation). It does not
+replace the terms that apply to the third-party material listed below.
 
-You are solely responsible for determining the appropriateness of using and distributing the software and you assume all risks associated with its use, including but not limited to the risks and costs of program errors, compliance with applicable laws, damage to or loss of data, programs or equipment, and the unavailability or interruption of operation. This software is not intended to be used in any situation where a failure could cause risk of injury or damage to property. The software developed by NIST employees is not subject to copyright protection within the United States.
+1. NIST test vectors (CAVP / ACVP)
+----------------------------------
+
+The golden-model data directories contain test-vector files obtained from the
+National Institute of Standards and Technology (NIST) Automated Cryptographic
+Validation Protocol (ACVP) / Cryptographic Algorithm Validation Program (CAVP):
+
+  - ecdsa-keygen            (ECDSA keyGen)
+  - kas-ecc-cdh-component   (KAS-ECC CDH-Component)
+  - kas-ecc-p192            (KAS-ECC; includes files derived from the NIST data)
+
+Source: National Institute of Standards and Technology. The vectors are used
+here only to validate the golden model and the RTL. The source is
+acknowledged explicitly: NIST is the source of these vectors.
+
+Modifications: some files in these directories were reformatted, filtered or
+converted by scripts of this project (for example parse_nist.py and the
+derived nist_p256_vectors.json). Such files are modified works. They were
+created in 2026 and differ from the NIST originals in format and selection of
+entries, not in the cryptographic values.
+
+NIST notice, reproduced as published for NIST-developed software:
+
+  NIST-developed software is provided by NIST as a public service. You may
+  use, copy, and distribute copies of the software in any medium, provided
+  that you keep intact this entire notice. You may improve, modify, and
+  create derivative works of the software or any portion of the software, and
+  you may copy and distribute such modifications or works. Modified works
+  should carry a notice stating that you changed the software and should note
+  the date and nature of any such change. Please explicitly acknowledge the
+  National Institute of Standards and Technology as the source of the
+  software.
+
+  NIST-developed software is expressly provided "AS IS." NIST MAKES NO
+  WARRANTY OF ANY KIND, EXPRESS, IMPLIED, IN FACT, OR ARISING BY OPERATION OF
+  LAW, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTY OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND
+  DATA ACCURACY. NIST NEITHER REPRESENTS NOR WARRANTS THAT THE OPERATION OF
+  THE SOFTWARE WILL BE UNINTERRUPTED OR ERROR-FREE, OR THAT ANY DEFECTS WILL
+  BE CORRECTED. NIST DOES NOT WARRANT OR MAKE ANY REPRESENTATIONS REGARDING
+  THE USE OF THE SOFTWARE OR THE RESULTS THEREOF, INCLUDING BUT NOT LIMITED
+  TO THE CORRECTNESS, ACCURACY, RELIABILITY, OR USEFULNESS OF THE SOFTWARE.
+
+  You are solely responsible for determining the appropriateness of using and
+  distributing the software and you assume all risks associated with its use,
+  including but not limited to the risks and costs of program errors,
+  compliance with applicable laws, damage to or loss of data, programs or
+  equipment, and the unavailability or interruption of operation. This
+  software is not intended to be used in any situation where a failure could
+  cause risk of injury or damage to property. The software developed by NIST
+  employees is not subject to copyright protection within the United States.
+
+2. RFC 6979 test vectors
+------------------------
+
+The rfc6979 data directory contains test vectors for deterministic ECDSA
+taken from RFC 6979, "Deterministic Usage of the Digital Signature Algorithm
+(DSA) and Elliptic Curve Digital Signature Algorithm (ECDSA)" (IETF), and
+compiled into a single file for the prime-field curves supported by this
+project.

@@ -1,117 +1,155 @@
 # src/point_arithmetic.py
 from src.modular_alu import ModularALU
 
+
 class PointArithmetic:
     """
-    4. Katman: Eliptik Eğri Nokta Aritmetiği (Standart Projektif Koordinatlar)
-    Koordinat Sistemi: x = X/Z, y = Y/Z
+    4. Katman: Eliptik Eğri Nokta Aritmetiği — JACOBIAN KOORDİNATLAR.
+
+    Koordinat Sistemi: x = X/Z^2, y = Y/Z^3   (Standart projektif DEĞİL!)
+
+    ÖNEMLİ: Bu modül, RTL'deki point_arithmetic_unit.v (PAU) ile BİREBİR AYNI
+    formülleri kullanır (24 adımlık mikrokod tablosundan çıkarılmıştır):
+      - DBL: "dbl-2001-b" (a=-3 için Bernstein/Lange Jacobian ikileme formülü)
+      - ADD: "add-2007-bl" ailesi (genel Jacobian toplama formülü)
+
+    Girdi/çıktı değerleri MONTGOMERY UZAYINDADIR (ScalarMultiplier/DualScalarMult
+    bu katmanı hep mont-domain X,Y,Z ile çağırır) — ModularALU.mod_add/mod_sub
+    doğrusal olduğundan Montgomery kodlamasıyla değişmeli (homomorphic) çalışır,
+    montgomery_multiply_radix2 ise iki mont-domain girdiyi çarpıp yine mont-domain
+    sonuç üretir. Bu yüzden bu katman "Montgomery mi değil mi" bilmeden çalışır.
+
+    *** RTL DAVRANIŞ EŞLEŞTİRMESİ (KASITLI, "hatalı" GÖRÜNSE DE DOĞRU) ***
+    ADD içinde H == U2-U1 == 0 olduğunda (yani X koordinatları eşit), RTL
+    HER ZAMAN sonucu sonsuzluk noktası olarak ZORLAR ve o_err bayrağını
+    yükseltir — S1==S2 olsa bile (yani gerçek bir P1==P2 ikileme durumu olsa
+    bile) RTL bunu double'a yönlendirmez. point_arithmetic_unit.v'nin kendi
+    yorumu: "ADD'de H == 0 (P = Q) durumunda ... Z = 0 zorlanır." Bu, ladder
+    (R0 ile R1 hep P kadar farklı) ve Straus-Shamir (pratikte neredeyse hiç
+    çakışmaz) tasarım varsayımları altında güvenlidir. Golden model, RTL'i
+    BİT-BİREBİR temsil etmek için bu davranışı KASITLI OLARAK kopyalar;
+    "matematiksel olarak daha doğru" bir double-fallback EKLEMEZ.
     """
 
+    # ------------------------------------------------------------------
+    # Jacobian -> Affine dönüşüm (affine_donusum.v'nin yazılım karşılığı)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def to_affine(P, p):
+        """(X, Y, Z) Jacobian (standart uzayda) -> (x, y) affine.
+        x = X * Z^-2 mod p ,  y = Y * Z^-3 mod p
+        Z ters alma işlemi RTL'de affine_donusum.v tarafından Fermat
+        (a^(p-2) mod p) ile, MALU üzerinden yapılır — burada da aynı
+        şekilde ModularALU.montgomery_pow ile modellenir.
+        """
+        X, Y, Z = P
+        if Z == 0:
+            return (0, 0)
+        bit_len = p.bit_length()
+        # Fermat ile ters alma: Z^-1 mod p  (mod_n_ters.v/affine_donusum.v ile aynı yöntem)
+        z_inv = ModularALU.montgomery_pow(Z, p - 2, p, bit_len)
+        z_inv2 = (z_inv * z_inv) % p
+        z_inv3 = (z_inv2 * z_inv) % p
+        x_affine = (X * z_inv2) % p
+        y_affine = (Y * z_inv3) % p
+        return (x_affine, y_affine)
+
+    # ------------------------------------------------------------------
+    # DBL — point_arithmetic_unit.v, i_cmd=0 mikrokodu (adım 0..23)
+    # ------------------------------------------------------------------
     @staticmethod
     def point_double(P1, curve):
-        """P1 + P1 = 2*P1 (Standart Projektif Koordinatlar, a=-3)"""
+        """P1 + P1 = 2*P1  (Jacobian, a = -3, "dbl-2001-b")"""
         X1, Y1, Z1 = P1
         p = curve.p
-        bit_len = curve.bit_length
+        bl = curve.bit_length
 
+        # RTL: ST_CHK_INF artık koşulsuzdur (SPA düzeltmesi) ama SONUÇ
+        # seçimi hâlâ Z1=0 için P1'i aynen döndürür (tx_base_w = A_P1X).
         if Z1 == 0:
             return P1
 
-        # NIST Eğrilerinde 'a' sabiti her zaman -3'tür.
-        # Matematiksel Formül: w = 3 * X1^2 + a * Z1^2 = 3 * (X1^2 - Z1^2) = 3 * (X1 - Z1) * (X1 + Z1)
-        X_minus_Z = ModularALU.mod_sub(X1, Z1, p)
-        X_plus_Z = ModularALU.mod_add(X1, Z1, p)
-        w_part = ModularALU.montgomery_multiply_radix2(X_minus_Z, X_plus_Z, p, bit_len)
-        w = ModularALU.mod_add(w_part, w_part, p)
-        w = ModularALU.mod_add(w, w_part, p) # w = 3 * w_part
+        mm = lambda a, b: ModularALU.montgomery_multiply_radix2(a, b, p, bl)
+        add = lambda a, b: ModularALU.mod_add(a, b, p)
+        sub = lambda a, b: ModularALU.mod_sub(a, b, p)
 
-        # s = Y1 * Z1
-        s = ModularALU.montgomery_multiply_radix2(Y1, Z1, p, bit_len)
-
-        # B = X1 * Y1 * s
-        Y1_s = ModularALU.montgomery_multiply_radix2(Y1, s, p, bit_len)
-        B = ModularALU.montgomery_multiply_radix2(X1, Y1_s, p, bit_len)
-
-        # h = w^2 - 8B
-        w_squared = ModularALU.montgomery_multiply_radix2(w, w, p, bit_len)
-        two_B = ModularALU.mod_add(B, B, p)
-        four_B = ModularALU.mod_add(two_B, two_B, p)
-        eight_B = ModularALU.mod_add(four_B, four_B, p)
-        h = ModularALU.mod_sub(w_squared, eight_B, p)
-
-        # X3 = 2 * h * s
-        h_s = ModularALU.montgomery_multiply_radix2(h, s, p, bit_len)
-        X3 = ModularALU.mod_add(h_s, h_s, p)
-
-        # Y3 = w * (4B - h) - 8 * Y1^2 * s^2
-        four_B_minus_h = ModularALU.mod_sub(four_B, h, p)
-        part1 = ModularALU.montgomery_multiply_radix2(w, four_B_minus_h, p, bit_len)
-
-        Y1_sq = ModularALU.montgomery_multiply_radix2(Y1, Y1, p, bit_len)
-        s_sq = ModularALU.montgomery_multiply_radix2(s, s, p, bit_len)
-        Y1_sq_s_sq = ModularALU.montgomery_multiply_radix2(Y1_sq, s_sq, p, bit_len)
-
-        eight_Y1_sq_s_sq = ModularALU.mod_add(Y1_sq_s_sq, Y1_sq_s_sq, p)
-        eight_Y1_sq_s_sq = ModularALU.mod_add(eight_Y1_sq_s_sq, eight_Y1_sq_s_sq, p)
-        eight_Y1_sq_s_sq = ModularALU.mod_add(eight_Y1_sq_s_sq, eight_Y1_sq_s_sq, p)
-
-        Y3 = ModularALU.mod_sub(part1, eight_Y1_sq_s_sq, p)
-
-        # Z3 = 8 * s^3
-        s_cubed = ModularALU.montgomery_multiply_radix2(s_sq, s, p, bit_len)
-        Z3 = ModularALU.mod_add(s_cubed, s_cubed, p)
-        Z3 = ModularALU.mod_add(Z3, Z3, p)
-        Z3 = ModularALU.mod_add(Z3, Z3, p)
+        delta = mm(Z1, Z1)                       # adım 0
+        gamma = mm(Y1, Y1)                       # adım 1
+        beta = mm(X1, gamma)                     # adım 2
+        teksi = sub(X1, delta)                   # adım 3   (X1 - delta)
+        tarti = add(X1, delta)                   # adım 4   (X1 + delta)
+        mara = mm(teksi, tarti)                  # adım 5
+        mara2 = add(mara, mara)                  # adım 6
+        w = add(mara2, mara)                     # adım 7   (= 3*mara = alpha)
+        alphak = mm(w, w)                        # adım 8   (alpha^2)
+        beta2 = add(beta, beta)                  # adım 9
+        beta4 = add(beta2, beta2)                # adım 10
+        beta8 = add(beta4, beta4)                # adım 11
+        X3 = sub(alphak, beta8)                  # adım 12
+        yztop = add(Y1, Z1)                      # adım 13
+        yzkare = mm(yztop, yztop)                # adım 14
+        zt1 = sub(yzkare, gamma)                 # adım 15
+        Z3 = sub(zt1, delta)                     # adım 16
+        y3t1 = sub(beta4, X3)                    # adım 17
+        y3t2 = mm(w, y3t1)                       # adım 18
+        gammak = mm(gamma, gamma)                # adım 19
+        g2 = add(gammak, gammak)                 # adım 20
+        g4 = add(g2, g2)                         # adım 21
+        g8 = add(g4, g4)                         # adım 22
+        Y3 = sub(y3t2, g8)                       # adım 23
 
         return (X3, Y3, Z3)
 
+    # ------------------------------------------------------------------
+    # ADD — point_arithmetic_unit.v, i_cmd=1 mikrokodu (adım 0..23)
+    # ------------------------------------------------------------------
     @staticmethod
     def point_add(P1, P2, curve):
-        """P1 + P2 = P3 (Standart Projektif Koordinatlar)"""
+        """P1 + P2 = P3 (Jacobian, genel toplama formülü — "add-2007-bl" ailesi)"""
         X1, Y1, Z1 = P1
         X2, Y2, Z2 = P2
         p = curve.p
-        bit_len = curve.bit_length
+        bl = curve.bit_length
 
+        # RTL SABİT-ZAMANLI ÇIKIŞ SEÇİMİ (tx_base_w): hesap her koşulda
+        # tam çalışır, yalnızca DÖNÜLEN SONUÇ burada (yazılımda anlık) seçilir.
         if Z1 == 0:
             return P2
         if Z2 == 0:
             return P1
 
-        U1 = ModularALU.montgomery_multiply_radix2(Y2, Z1, p, bit_len)
-        U2 = ModularALU.montgomery_multiply_radix2(Y1, Z2, p, bit_len)
+        mm = lambda a, b: ModularALU.montgomery_multiply_radix2(a, b, p, bl)
+        add = lambda a, b: ModularALU.mod_add(a, b, p)
+        sub = lambda a, b: ModularALU.mod_sub(a, b, p)
 
-        V1 = ModularALU.montgomery_multiply_radix2(X2, Z1, p, bit_len)
-        V2 = ModularALU.montgomery_multiply_radix2(X1, Z2, p, bit_len)
+        z1k = mm(Z1, Z1)                         # adım 0   Z1^2
+        z2k = mm(Z2, Z2)                         # adım 1   Z2^2
+        z1kup = mm(z1k, Z1)                      # adım 2   Z1^3
+        z2kup = mm(z2k, Z2)                      # adım 3   Z2^3
+        u1 = mm(X1, z2k)                         # adım 4
+        u2 = mm(X2, z1k)                         # adım 5
+        s1 = mm(Y1, z2kup)                       # adım 6
+        s2 = mm(Y2, z1kup)                       # adım 7
+        h = sub(u2, u1)                          # adım 8
+        r_ = sub(s2, s1)                         # adım 9
+        h2 = mm(h, h)                            # adım 10
+        h3 = mm(h2, h)                           # adım 11
+        u1h2 = mm(u1, h2)                        # adım 12
+        r2 = mm(r_, r_)                          # adım 13
+        u1h2x2 = add(u1h2, u1h2)                 # adım 14
+        x3t1 = sub(r2, h3)                       # adım 15
+        X3 = sub(x3t1, u1h2x2)                   # adım 16
+        y3t1a = sub(u1h2, X3)                    # adım 17
+        y3t2a = mm(r_, y3t1a)                    # adım 18
+        y3t3a = mm(s1, h3)                       # adım 19
+        Y3 = sub(y3t2a, y3t3a)                   # adım 20
+        zt1a = mm(h, Z1)                         # adım 21
+        Z3 = mm(zt1a, Z2)                        # adım 22
+        # adım 23: sahte adım (dummy) — sonuç yazılmaz
 
-        u = ModularALU.mod_sub(U1, U2, p)
-        v = ModularALU.mod_sub(V1, V2, p)
-
-        if v == 0:
-            if u == 0:
-                return PointArithmetic.point_double(P1, curve)
-            else:
-                return (0, 0, 0)
-
-        w = ModularALU.montgomery_multiply_radix2(Z1, Z2, p, bit_len)
-        v_squared = ModularALU.montgomery_multiply_radix2(v, v, p, bit_len)
-        v_cubed = ModularALU.montgomery_multiply_radix2(v_squared, v, p, bit_len)
-        v_squared_V2 = ModularALU.montgomery_multiply_radix2(v_squared, V2, p, bit_len)
-        u_squared = ModularALU.montgomery_multiply_radix2(u, u, p, bit_len)
-        u_squared_w = ModularALU.montgomery_multiply_radix2(u_squared, w, p, bit_len)
-
-        two_v_squared_V2 = ModularALU.mod_add(v_squared_V2, v_squared_V2, p)
-        A = ModularALU.mod_sub(u_squared_w, v_cubed, p)
-        A = ModularALU.mod_sub(A, two_v_squared_V2, p)
-
-        X3 = ModularALU.montgomery_multiply_radix2(v, A, p, bit_len)
-
-        v_squared_V2_minus_A = ModularALU.mod_sub(v_squared_V2, A, p)
-
-        part1 = ModularALU.montgomery_multiply_radix2(u, v_squared_V2_minus_A, p, bit_len)
-        part2 = ModularALU.montgomery_multiply_radix2(v_cubed, U2, p, bit_len)
-
-        Y3 = ModularALU.mod_sub(part1, part2, p)
-        Z3 = ModularALU.montgomery_multiply_radix2(v_cubed, w, p, bit_len)
+        # *** RTL'İN KENDİ SINIRLAMASI: H == 0 HER ZAMAN SONSUZLUĞA ZORLANIR ***
+        # (bkz. sınıf docstring'i — gerçek bir double durumunu da kapsar)
+        if h == 0:
+            return (0, 0, 0)
 
         return (X3, Y3, Z3)

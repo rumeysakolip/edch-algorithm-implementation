@@ -87,3 +87,45 @@ class ModularALU:
         """Sayıyı normal uzaya geri döndürür. FPGA'in en son çıkışında uygulanır."""
         # a_mont * 1 işlemi sayıyı tekrar standart forma sokar.
         return ModularALU.montgomery_multiply_radix2(a_mont, 1, p, bit_length)
+
+    @staticmethod
+    def mod_mul(a_std, b_std, p, bit_length=256):
+        """
+        İKİ STANDART (Montgomery olmayan) sayıyı, PAYLAŞILAN Montgomery çarpıcı
+        üzerinden çarpar: a*b mod p.
+
+        RTL'de (ecdsa_imza.v yorumu) şu optimizasyon kullanılır: yalnızca TEK
+        operandı Montgomery uzayına taşımak yeterlidir —
+            MontMult(mont(a), b) = a*R*b*R^-1 = a*b mod p
+        Bu, 5 dönüşüm yerine 2 dönüşüme indirger (aynı RTL optimizasyonu).
+        """
+        R = 1 << bit_length
+        r2_mod_p = (R * R) % p
+        a_mont = ModularALU.to_montgomery_domain(a_std, r2_mod_p, p, bit_length)
+        return ModularALU.montgomery_multiply_radix2(a_mont, b_std, p, bit_length)
+
+    @staticmethod
+    def montgomery_pow(base_std, exponent, modulus, bit_length=256):
+        """
+        Sabit-yapılı (constant-structure) modüler üs alma: base^exponent mod modulus.
+
+        mod_n_ters.v / ecdsa_imza.v'nin yaptığı gibi TAMAMEN Montgomery uzayında
+        çalışır: taban Montgomery'ye taşınır, sonuç Montgomery "1" (= R mod n) ile
+        başlatılır, üs BAŞTAN SONA (bit_length kadar, üssün gerçek bit uzunluğundan
+        BAĞIMSIZ) kare-al/çarp döngüsüyle taranır — açık (public) bir üs için bu
+        RTL'in "256 kare + koşullu çarpma" sabit-zamanlı yapısını modeller. En
+        sonda sonuç normal uzaya geri döndürülür.
+
+        Bu fonksiyon hem GF(p) (affine dönüşüm, nokta doğrulama) hem GF(n)
+        (k^-1, s^-1 — bkz. scalar_field.py) için AYNI ŞEKİLDE kullanılır; RTL'de
+        de tek bir MALU örneği modülüs değiştirilerek her ikisi için paylaşılır.
+        """
+        R = 1 << bit_length
+        r2_mod_m = (R * R) % modulus
+        result_mont = ModularALU.to_montgomery_domain(1, r2_mod_m, modulus, bit_length)  # Montgomery "1" = R mod n
+        base_mont = ModularALU.to_montgomery_domain(base_std, r2_mod_m, modulus, bit_length)
+        for i in range(bit_length - 1, -1, -1):
+            result_mont = ModularALU.montgomery_multiply_radix2(result_mont, result_mont, modulus, bit_length)
+            if (exponent >> i) & 1:
+                result_mont = ModularALU.montgomery_multiply_radix2(result_mont, base_mont, modulus, bit_length)
+        return ModularALU.from_montgomery_domain(result_mont, modulus, bit_length)

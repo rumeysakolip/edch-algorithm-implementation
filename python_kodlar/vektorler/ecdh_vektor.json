@@ -1,0 +1,20 @@
+{
+  "tohum": 1,
+  "aciklama": "ECDH test vektoru \u2014 TB ve host icin ortak kaynak",
+  "montgomery_R": "0xfffffffeffffffffffffffffffffffff000000000000000000000001",
+  "word_sirasi": "little-endian (word0 = bit[31:0])",
+  "bayt_sirasi": "LSB-first",
+  "d_a": "0xc9afa9d845ba75176c3937d91da02c2a1b2c3d4e5f607182a5d90c3f72a5d7f1",
+  "qb_x_mont": "0xb5e77bb791a2cc9b8871808177e017affebf67930386cecbcc687464212a4abf",
+  "qb_y_mont": "0xe4b6e8718e80e9405377d6b26942db7e109f38753ce09f6c16d2ecf9e80ab59a",
+  "qa_x_mont": "0x13faf75c66aa35163a589578fd914659e3156d852815c49aaa72eebe7ba0923f",
+  "qa_y_mont": "0x43c06da40fe13d3005b9cfc718679bb48872c8ee44f6f56f773ee51e77ad9539",
+  "s_x_mont": "0x95c047f3b0dc5cba104efb4a3dd529948bba744cd08421ca2c3eed373760f814",
+  "s_y_mont": "0x94c2b6bdfa5edc09f172fee5e0a7e5c29008bd32f9c58a29deb0f26e21796f14",
+  "qa_x_norm": "0xead188f3562f3e260c3f1bee8696a21e192024c05c3582e32213f1015bb1c22e",
+  "qa_y_norm": "0xd2f83e5bb4b6f23495f9d302cca4ec2cbb2aa28ba7755677ba177e6690166ac0",
+  "s_x_norm": "0xf4b253e1b6a66d4d2a2cafc83499bae639da72aa6c2f2017ca2ef8fcbc7949bb",
+  "s_y_norm": "0x11531248bc07651c2f3123f3a17ac685dd61dd2618ef485c63c80bf027c68fe0",
+  "qb_yukle_veri": "bf4a2a21647468cccbce86039367bffeaf17e077818071889bcca291b77be7b59ab50ae8f9ecd2166c9fe03c75389f107edb4269b2d6775340e9808e71e8b6e4",
+  "d_yukle_veri": "f1d7a5723f0cd9a58271605f4e3d2c1b2a2ca01dd937396c1775ba45d8a9afc9"
+}

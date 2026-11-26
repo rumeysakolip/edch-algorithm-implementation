@@ -1,0 +1,16 @@
+{
+  "testGroups": [
+    {
+      "curve": "P-256",
+      "tests": [
+        {
+          "tcId": 1,
+          "d": "70a12c2db16845ed56b66abe8c474cd2df7900b925b392a832f059abce050b15",
+          "qX": "8101ece47464a6ead70cf69a6e2bd3d88691a3262d22cba4f7635eaff26680a8",
+          "qY": "d8a12ba61d599235f67d9cb4d58f170f53eb51833d7b4db1ce3bc49dfa6d8172",
+          "z": "81d77a0b382d627fb2eaf3bfaf9cc49830da0a4f5f590fcbd2bbabf3ff2dbfa8"
+        }
+      ]
+    }
+  ]
+}
